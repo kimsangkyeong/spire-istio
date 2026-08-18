@@ -1,0 +1,108 @@
+# ==============================================================================
+# 08. Istio CR - SPIRE 연동 설정
+# ==============================================================================
+# 목적: Istio Control Plane(istiod) 배포 + SPIRE 연동
+#       - Envoy sidecar가 SPIRE Agent에서 인증서를 획득하도록 설정
+#       - Istio 내장 CA 대신 SPIRE를 CA로 사용
+#       - Gateway 배포 없이 Sidecar Only 모드 운영
+# 배포형태: Deployment (istiod in istio-system)
+# 순서: IstioCNI Ready 확인 후, SPIRE 전체 컴포넌트 Ready 확인 후
+# ==============================================================================
+#
+# 적용 전 환경변수 설정:
+#
+# export ZTWIM_NS=zero-trust-workload-identity-manager
+# export TRUST_DOMAIN="apps.ocp4.example.com"    # <-- 실제 도메인
+# export JWT_ISSUER="https://oidc-discovery.$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')"
+# export OSSM_NS=istio-system
+#
+# OIDC Serving Cert 추출 (Istio pilot이 SPIRE JWT를 신뢰하기 위함):
+# export EXTRA_ROOT_CA="$(oc get secret oidc-serving-cert \
+#   -n ${ZTWIM_NS} -o json | \
+#   jq -r '.data."tls.crt"' | \
+#   base64 -d | \
+#   sed 's/^/        /')"
+#
+# 적용:
+# oc new-project istio-system
+# oc apply -f 08-istio-cr-spire.yaml
+#
+# 검증:
+# oc get deployment istiod -n istio-system
+# oc wait --for=condition=Available deployment/istiod -n istio-system --timeout=300s
+# ==============================================================================
+
+apiVersion: sailoperator.io/v1
+kind: Istio
+metadata:
+  name: default
+spec:
+  namespace: istio-system
+  updateStrategy:
+    type: InPlace
+  values:
+    # =========================================================================
+    # Pilot (istiod) 설정
+    # =========================================================================
+    pilot:
+      # SPIRE OIDC Discovery Provider의 Root CA를 Pilot에 주입
+      # Pilot이 SPIRE 발급 JWT를 신뢰/검증할 수 있게 함
+      jwksResolverExtraRootCA: |
+        -----BEGIN CERTIFICATE-----
+        # <-- OIDC Serving Cert 내용을 여기에 붙여넣기
+        # 또는 envsubst로 ${EXTRA_ROOT_CA} 치환
+        -----END CERTIFICATE-----
+      env:
+        # Remote JWKS 페치 활성화 (SPIRE OIDC Provider에서 키 가져옴)
+        PILOT_JWT_ENABLE_REMOTE_JWKS: "true"
+
+    # =========================================================================
+    # Mesh 전역 설정
+    # =========================================================================
+    meshConfig:
+      # SPIFFE Trust Domain (SPIRE와 동일하게 설정)
+      trustDomain: "apps.ocp4.example.com"  # <-- 실제 Trust Domain으로 변경
+
+      # Sidecar Proxy 기본 설정
+      defaultConfig:
+        proxyMetadata:
+          # SPIRE Agent 소켓 파일명 지정
+          # CSI 마운트 경로(/run/secrets/workload-spiffe-uds/)에서 이 파일을 찾음
+          WORKLOAD_IDENTITY_SOCKET_FILE: "spire-agent.sock"
+
+    # =========================================================================
+    # Sidecar Injector Webhook - SPIRE 전용 템플릿
+    # =========================================================================
+    # Gateway를 사용하지 않으므로 spireGateway 템플릿은 참고용으로만 포함
+    sidecarInjectorWebhook:
+      templates:
+        # --- 일반 워크로드용 SPIRE 사이드카 템플릿 ---
+        # Pod annotation에서 "inject.istio.io/templates: sidecar,spire" 로 호출
+        spire: |
+          spec:
+            initContainers:
+            - name: istio-proxy
+              volumeMounts:
+              - name: workload-socket
+                mountPath: /run/secrets/workload-spiffe-uds
+                readOnly: true
+            volumes:
+              - name: workload-socket
+                csi:
+                  driver: "csi.spiffe.io"
+                  readOnly: true
+        # --- Gateway용 SPIRE 템플릿 (참고용 - 본 환경에서는 미사용) ---
+        # NGINX IC Plus를 사용하므로 Istio Gateway 배포하지 않음
+        spireGateway: |
+          spec:
+            containers:
+            - name: istio-proxy
+              volumeMounts:
+              - name: workload-socket
+                mountPath: /run/secrets/workload-spiffe-uds
+                readOnly: true
+            volumes:
+              - name: workload-socket
+                csi:
+                  driver: "csi.spiffe.io"
+                  readOnly: true

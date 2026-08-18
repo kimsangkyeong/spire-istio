@@ -1,0 +1,32 @@
+# ==============================================================================
+# 02. ZeroTrustWorkloadIdentityManager CR
+# ==============================================================================
+# 목적: SPIRE 배포의 최상위 리소스. Trust Domain과 클러스터 이름을 정의
+# 주의: trustDomain, clusterName, bundleConfigMap은 생성 후 변경 불가 (immutable)
+# 순서: SPIRE 컴포넌트 CR 생성 전 반드시 먼저 생성
+# ==============================================================================
+# 
+# 적용 전 환경변수 설정:
+# export TRUST_DOMAIN=$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')
+#
+# 또는 trustDomain을 직접 지정:
+# export TRUST_DOMAIN="apps.mycluster.example.com"
+# ==============================================================================
+
+apiVersion: operator.openshift.io/v1alpha1
+kind: ZeroTrustWorkloadIdentityManager
+metadata:
+  name: cluster
+  labels:
+    app.kubernetes.io/name: zero-trust-workload-identity-manager
+    app.kubernetes.io/managed-by: zero-trust-workload-identity-manager
+spec:
+  # SPIFFE Trust Domain - 클러스터의 apps 도메인과 일치시키는 것을 권장
+  # 예: apps.ocp4.example.com
+  trustDomain: "apps.ocp4.example.com"   # <-- 실제 클러스터 도메인으로 변경
+
+  # 클러스터 식별 이름 (Federation 시 사용)
+  clusterName: "production-cluster"
+
+  # Trust Bundle을 저장할 ConfigMap 이름
+  bundleConfigMap: "spire-bundle"

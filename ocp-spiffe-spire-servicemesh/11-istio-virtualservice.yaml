@@ -1,0 +1,84 @@
+# ==============================================================================
+# 11. Istio VirtualService + DestinationRule 예시
+# ==============================================================================
+# 목적: Service Mesh 내부에서의 트래픽 라우팅 규칙 정의
+#       - NGINX IC에서 전달받은 트래픽이 Pod에 들어오면 Envoy가 인터셉트
+#       - VirtualService로 canary, retry, timeout, fault injection 등 제어
+#       - DestinationRule로 mTLS 모드 및 로드밸런싱 정의
+# 흐름: NGINX IC → frontend-svc → (Envoy intercept) → VirtualService 규칙 적용
+# ==============================================================================
+#
+# 적용:
+# oc apply -f 11-istio-virtualservice.yaml
+#
+# 검증:
+# oc get virtualservices -n app-frontend
+# oc get destinationrules -n app-frontend
+# ==============================================================================
+
+---
+# Frontend → Backend 호출 시 라우팅 규칙
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: backend-routing
+  namespace: app-backend
+spec:
+  hosts:
+    - backend-svc.app-backend.svc.cluster.local
+  http:
+    # --- Canary 배포 예시: 90% v1, 10% v2 ---
+    - match:
+        - headers:
+            x-canary:
+              exact: "true"
+      route:
+        - destination:
+            host: backend-svc.app-backend.svc.cluster.local
+            subset: v2
+            port:
+              number: 80
+          weight: 100
+
+    # --- 기본 라우팅 ---
+    - route:
+        - destination:
+            host: backend-svc.app-backend.svc.cluster.local
+            subset: v1
+            port:
+              number: 80
+          weight: 90
+        - destination:
+            host: backend-svc.app-backend.svc.cluster.local
+            subset: v2
+            port:
+              number: 80
+          weight: 10
+      # Retry 정책
+      retries:
+        attempts: 3
+        perTryTimeout: 2s
+        retryOn: "5xx,reset,connect-failure"
+      # Timeout 정책
+      timeout: 10s
+
+---
+# Frontend 자체의 VirtualService (내부 호출 시)
+apiVersion: networking.istio.io/v1
+kind: VirtualService
+metadata:
+  name: frontend-routing
+  namespace: app-frontend
+spec:
+  hosts:
+    - frontend-svc.app-frontend.svc.cluster.local
+  http:
+    - route:
+        - destination:
+            host: frontend-svc.app-frontend.svc.cluster.local
+            port:
+              number: 80
+      retries:
+        attempts: 2
+        perTryTimeout: 3s
+      timeout: 15s

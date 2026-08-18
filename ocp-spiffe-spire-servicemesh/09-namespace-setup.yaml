@@ -1,0 +1,66 @@
+# ==============================================================================
+# 09. 애플리케이션 네임스페이스 설정
+# ==============================================================================
+# 목적: 애플리케이션 네임스페이스에 Istio sidecar injection 활성화
+# 주의: OCP 엔진 네임스페이스(openshift-*, kube-system 등)에는 적용 금지
+# ==============================================================================
+#
+# 방법 1: oc 명령으로 적용 (권장)
+# oc create namespace app-frontend
+# oc label namespace app-frontend istio-injection=enabled
+#
+# 방법 2: 아래 YAML 적용
+# oc apply -f 09-namespace-setup.yaml
+# ==============================================================================
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app-frontend
+  labels:
+    istio-injection: enabled
+    # Istio control plane이 이 네임스페이스를 발견할 수 있게 함
+    # OSSM 3.x에서는 istio-injection=enabled로 충분
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: app-backend
+  labels:
+    istio-injection: enabled
+
+---
+# ============================================================================
+# [참고] Injection 제외 대상 네임스페이스 목록
+# ============================================================================
+# 아래 네임스페이스에는 절대 istio-injection=enabled 라벨을 부여하지 마세요:
+#
+# - openshift-apiserver
+# - openshift-authentication
+# - openshift-console
+# - openshift-controller-manager
+# - openshift-dns
+# - openshift-etcd
+# - openshift-image-registry
+# - openshift-ingress              (NGINX IC Plus가 운영되는 곳)
+# - openshift-ingress-operator
+# - openshift-kube-apiserver
+# - openshift-kube-controller-manager
+# - openshift-kube-scheduler
+# - openshift-machine-api
+# - openshift-monitoring
+# - openshift-multus
+# - openshift-network-operator
+# - openshift-node
+# - openshift-operator-lifecycle-manager
+# - openshift-sdn / openshift-ovn-kubernetes
+# - kube-system
+# - kube-public
+# - default
+# - istio-system
+# - istio-cni
+# - zero-trust-workload-identity-manager
+# - nginx-ingress                  (NGINX IC Plus 네임스페이스)
+# ============================================================================

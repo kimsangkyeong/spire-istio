@@ -1,0 +1,197 @@
+# ==============================================================================
+# Phase 3: 애플리케이션 Pod Annotation 수정 및 재배포
+# ==============================================================================
+# 목적: SPIRE 관련 annotation 제거하여 Istio 기본 sidecar injection 사용
+#       - inject.istio.io/templates: "sidecar,spire" → 제거 (또는 "sidecar"만)
+#       - spiffe.io/audience → 제거
+#       - CSI 볼륨이 없으므로 spire 템플릿 사용 시 Pod 시작 실패
+# 시점: Phase 2 (Istio CR 수정) 후 istiod 정상 확인 후
+# 위험도: 중간 (롤링 업데이트로 무중단, PERMISSIVE이므로 새/구 Pod 모두 통신 가능)
+# ==============================================================================
+#
+# 방법 1: oc patch로 annotation 제거 (운영 중 빠른 적용)
+#
+# oc patch deployment frontend -n app-frontend --type='json' -p='[
+#   {"op":"remove","path":"/spec/template/metadata/annotations/inject.istio.io~1templates"},
+#   {"op":"remove","path":"/spec/template/metadata/annotations/spiffe.io~1audience"}
+# ]'
+#
+# oc patch deployment backend-v1 -n app-backend --type='json' -p='[
+#   {"op":"remove","path":"/spec/template/metadata/annotations/inject.istio.io~1templates"},
+#   {"op":"remove","path":"/spec/template/metadata/annotations/spiffe.io~1audience"}
+# ]'
+#
+# oc patch deployment backend-v2 -n app-backend --type='json' -p='[
+#   {"op":"remove","path":"/spec/template/metadata/annotations/inject.istio.io~1templates"},
+#   {"op":"remove","path":"/spec/template/metadata/annotations/spiffe.io~1audience"}
+# ]'
+#
+# 방법 2: 아래 YAML로 전체 재배포
+#
+# 적용:
+# oc apply -f 03-app-redeploy-no-spire.yaml
+#
+# 검증:
+# oc rollout status deployment/frontend -n app-frontend --timeout=300s
+# oc rollout status deployment/backend-v1 -n app-backend --timeout=300s
+#
+# Istio 내장 CA 인증서 확인:
+# FRONTEND_POD=$(oc get pod -l app=frontend -n app-frontend -o jsonpath="{.items[0].metadata.name}")
+# istioctl proxy-config secret $FRONTEND_POD -n app-frontend -o json | \
+#   jq -r '.dynamicActiveSecrets[0].secret.tlsCertificate.certificateChain.inlineBytes' | \
+#   base64 --decode | openssl x509 -text -noout | grep -E "Issuer|Subject"
+# → "Issuer: O = cluster.local" 확인 (SPIRE가 아닌 Istio CA)
+# ==============================================================================
+
+---
+# ============================================================================
+# Frontend - SPIRE annotation 제거된 버전
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: app-frontend
+  labels:
+    app: frontend
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: frontend
+        version: v1
+      # =====================================================================
+      # [변경] SPIRE annotation 제거
+      # 제거 전: inject.istio.io/templates: "sidecar,spire"
+      # 제거 전: spiffe.io/audience: "ocp-mesh-workload"
+      # 제거 후: annotation 없음 (namespace 라벨로 기본 sidecar injection)
+      # =====================================================================
+      # annotations 섹션 자체를 생략하거나 비워둠
+    spec:
+      serviceAccountName: frontend
+      containers:
+        - name: frontend
+          image: docker.io/mccutchen/go-httpbin:v2.15.0   # <-- 실제 이미지
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: BACKEND_URL
+              value: "http://backend-svc.app-backend.svc.cluster.local:80"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+---
+# ============================================================================
+# Backend v1 - SPIRE annotation 제거된 버전
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-v1
+  namespace: app-backend
+  labels:
+    app: backend
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: backend
+        version: v1
+      # [변경] SPIRE annotation 제거됨
+    spec:
+      serviceAccountName: backend
+      containers:
+        - name: backend
+          image: docker.io/mccutchen/go-httpbin:v2.15.0
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+---
+# ============================================================================
+# Backend v2 - SPIRE annotation 제거된 버전
+# ============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-v2
+  namespace: app-backend
+  labels:
+    app: backend
+    version: v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: backend
+        version: v2
+      # [변경] SPIRE annotation 제거됨
+    spec:
+      serviceAccountName: backend
+      containers:
+        - name: backend
+          image: docker.io/mccutchen/go-httpbin:v2.15.0
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

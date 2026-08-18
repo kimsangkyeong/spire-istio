@@ -1,0 +1,217 @@
+# ==============================================================================
+# 15. 샘플 애플리케이션 배포 (SPIRE + Istio Sidecar 통합)
+# ==============================================================================
+# 목적: SPIRE 연동 annotation이 포함된 실제 애플리케이션 배포 예시
+#       - inject.istio.io/templates: "sidecar,spire"  ← 핵심 annotation
+#       - spiffe.io/audience: "<audience>"             ← SPIFFE audience
+# 구성:
+#   - Frontend (app-frontend namespace) - 외부 요청 수신, Backend 호출
+#   - Backend  (app-backend namespace)  - 데이터 처리, DB 연동
+# ==============================================================================
+#
+# 적용:
+# oc apply -f 15-sample-app-deployment.yaml
+#
+# 검증:
+# oc get pods -n app-frontend
+# oc get pods -n app-backend
+# 각 Pod에 istio-proxy, workload-socket 볼륨이 있는지 확인:
+# oc describe pod -l app=frontend -n app-frontend | grep -A5 "Volumes"
+#
+# SPIRE 인증서 확인:
+# FRONTEND_POD=$(oc get pod -l app=frontend -n app-frontend -o jsonpath="{.items[0].metadata.name}")
+# istioctl proxy-config secret $FRONTEND_POD -n app-frontend -o json | \
+#   jq -r '.dynamicActiveSecrets[0].secret.tlsCertificate.certificateChain.inlineBytes' | \
+#   base64 --decode | openssl x509 -text | grep SPIRE
+# ==============================================================================
+
+---
+# ============================================================================
+# Frontend Application (app-frontend namespace)
+# ============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: frontend
+  namespace: app-frontend
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend
+  namespace: app-frontend
+  labels:
+    app: frontend
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: frontend
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: frontend
+        version: v1
+      annotations:
+        # =====================================================================
+        # [핵심] SPIRE + Istio Sidecar Injection 설정
+        # =====================================================================
+        # "sidecar" = 기본 Envoy sidecar injection
+        # "spire"   = SPIFFE CSI 볼륨 마운트 (SPIRE Agent 소켓 연결)
+        inject.istio.io/templates: "sidecar,spire"
+        # SPIFFE audience (Identity를 요청할 때 사용)
+        spiffe.io/audience: "ocp-mesh-workload"
+    spec:
+      serviceAccountName: frontend
+      containers:
+        - name: frontend
+          image: docker.io/mccutchen/go-httpbin:v2.15.0   # <-- 실제 이미지로 변경
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: BACKEND_URL
+              value: "http://backend-svc.app-backend.svc.cluster.local:80"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+---
+# ============================================================================
+# Backend Application (app-backend namespace)
+# ============================================================================
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: backend
+  namespace: app-backend
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-svc
+  namespace: app-backend
+  labels:
+    app: backend
+    service: backend
+spec:
+  type: ClusterIP
+  selector:
+    app: backend
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-v1
+  namespace: app-backend
+  labels:
+    app: backend
+    version: v1
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: backend
+      version: v1
+  template:
+    metadata:
+      labels:
+        app: backend
+        version: v1
+      annotations:
+        # [핵심] SPIRE + Istio Sidecar Injection
+        inject.istio.io/templates: "sidecar,spire"
+        spiffe.io/audience: "ocp-mesh-workload"
+    spec:
+      serviceAccountName: backend
+      containers:
+        - name: backend
+          image: docker.io/mccutchen/go-httpbin:v2.15.0   # <-- 실제 이미지로 변경
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+
+---
+# Backend v2 (Canary 배포용)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-v2
+  namespace: app-backend
+  labels:
+    app: backend
+    version: v2
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: backend
+      version: v2
+  template:
+    metadata:
+      labels:
+        app: backend
+        version: v2
+      annotations:
+        inject.istio.io/templates: "sidecar,spire"
+        spiffe.io/audience: "ocp-mesh-workload"
+    spec:
+      serviceAccountName: backend
+      containers:
+        - name: backend
+          image: docker.io/mccutchen/go-httpbin:v2.15.0   # <-- v2 이미지로 변경
+          ports:
+            - containerPort: 8080
+              name: http
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"

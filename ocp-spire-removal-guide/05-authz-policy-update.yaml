@@ -1,0 +1,124 @@
+# ==============================================================================
+# Phase 5: AuthorizationPolicy 수정 - Trust Domain 변경 반영
+# ==============================================================================
+# 목적: SPIRE Trust Domain → Istio 기본 Trust Domain으로 principals 수정
+#
+# 변경점:
+#   SPIRE 사용 시 principals 형식:
+#     "cluster.local/ns/app-frontend/sa/frontend"
+#     또는 "*/ns/app-frontend/sa/frontend"
+#
+#   Istio 내장 CA 사용 시 principals 형식:
+#     "cluster.local/ns/app-frontend/sa/frontend"
+#
+#   ※ 만약 SPIRE 시절 trustDomain이 "apps.ocp4.example.com"이었고
+#     AuthorizationPolicy에서 해당 도메인을 직접 참조했다면 수정 필요
+#     예: "apps.ocp4.example.com/ns/..." → "cluster.local/ns/..."
+#
+# 시점: Phase 4 (STRICT 복원) 후
+# 위험도: 낮음 (정책 수정이므로 즉시 적용)
+# ==============================================================================
+#
+# 적용:
+# oc apply -f 05-authz-policy-update.yaml
+#
+# 검증:
+# - 허용된 서비스에서 호출: 200 OK
+# - 허용되지 않은 서비스에서 호출: 403 Forbidden
+# ==============================================================================
+
+---
+# ============================================================================
+# 1. Deny-All 기본 정책 (변경 없음 - 유지)
+# ============================================================================
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all
+  namespace: app-frontend
+spec:
+  {}
+
+---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all
+  namespace: app-backend
+spec:
+  {}
+
+---
+# ============================================================================
+# 2. NGINX IC Plus → Frontend 허용 (변경 없음)
+# ============================================================================
+# NGINX IC는 mesh 외부이므로 SPIFFE/Istio ID와 무관
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-nginx-ingress
+  namespace: app-frontend
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - "nginx-ingress"
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+            ports: ["8080"]
+
+---
+# ============================================================================
+# 3. Frontend → Backend 허용 (Trust Domain 수정)
+# ============================================================================
+# [변경] principals 형식 확인/수정
+# SPIRE 시절: "apps.ocp4.example.com/ns/app-frontend/sa/frontend" (커스텀 도메인)
+# Istio 내장: "cluster.local/ns/app-frontend/sa/frontend"
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-frontend-to-backend
+  namespace: app-backend
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            # [수정됨] Trust Domain이 cluster.local로 변경
+            principals:
+              - "cluster.local/ns/app-frontend/sa/frontend"
+            namespaces:
+              - "app-frontend"
+      to:
+        - operation:
+            methods: ["GET", "POST"]
+            ports: ["8080"]
+
+---
+# ============================================================================
+# 4. 같은 네임스페이스 내 통신 허용 (변경 없음)
+# ============================================================================
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: app-backend
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - "app-backend"

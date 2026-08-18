@@ -1,0 +1,64 @@
+# ==============================================================================
+# 03. SpireServer CR
+# ==============================================================================
+# 목적: SPIRE Server 배포 - 중앙 CA 역할, SVID 발급 및 Registration Database 관리
+# 배포형태: StatefulSet (1 replica + PVC)
+# 순서: ZeroTrustWorkloadIdentityManager CR 생성 후
+# ==============================================================================
+#
+# 적용 전 환경변수 설정:
+# export JWT_ISSUER="https://oidc-discovery.$(oc get ingresses.config/cluster -o jsonpath='{.spec.domain}')"
+# echo $JWT_ISSUER  # 확인
+#
+# 적용:
+# oc apply -f 03-spire-server.yaml
+#
+# 검증:
+# oc get statefulset -l app.kubernetes.io/name=server -n zero-trust-workload-identity-manager
+# oc get po -l app.kubernetes.io/name=server -n zero-trust-workload-identity-manager
+# oc get pvc -l app.kubernetes.io/name=server -n zero-trust-workload-identity-manager
+# ==============================================================================
+
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireServer
+metadata:
+  name: cluster
+spec:
+  # --- 로깅 설정 ---
+  logLevel: "info"          # debug, info, warn, error
+  logFormat: "text"         # text, json
+
+  # --- JWT/OIDC 설정 ---
+  # SPIRE OIDC Discovery Provider의 JWT Issuer URL
+  # 반드시 https://oidc-discovery.<apps-domain> 형식
+  jwtIssuer: "https://oidc-discovery.apps.ocp4.example.com"  # <-- 실제 값으로 변경
+
+  # --- 인증서 유효기간 ---
+  caValidity: "24h"              # CA 인증서 유효기간
+  defaultX509Validity: "1h"       # X.509 SVID 기본 유효기간
+  defaultJWTValidity: "5m"        # JWT SVID 기본 유효기간
+
+  # --- 키 타입 ---
+  jwtKeyType: "rsa-2048"          # rsa-2048, rsa-4096, ec-p256, ec-p384
+
+  # --- CA Subject ---
+  caSubject:
+    country: "KR"
+    organization: "MyOrganization"
+    commonName: "SPIRE Server CA"
+
+  # --- 영구 스토리지 (SQLite 기본) ---
+  persistence:
+    size: "5Gi"
+    accessMode: "ReadWriteOnce"
+    # storageClass: "gp3-csi"     # 환경에 맞는 StorageClass 지정
+
+  # --- 데이터스토어 ---
+  datastore:
+    databaseType: "sqlite3"
+    connectionString: "/run/spire/data/datastore.sqlite3"
+    tlsSecretName: ""
+    maxOpenConns: 100
+    maxIdleConns: 10
+    connMaxLifetime: 0
+    disableMigration: "false"

@@ -1,0 +1,51 @@
+# ==============================================================================
+# Phase 1: PeerAuthentication → PERMISSIVE 전환
+# ==============================================================================
+# 목적: mTLS를 완화하여 SPIRE 인증서 만료 시에도 통신 유지
+#       PERMISSIVE 모드 = 평문(plaintext) + mTLS 모두 허용
+# 시점: SPIRE 제거 전 반드시 먼저 적용
+# 위험도: 낮음 (기존 mTLS 통신도 계속 작동)
+# ==============================================================================
+#
+# 적용:
+# oc apply -f 01-permissive-transition.yaml
+#
+# 검증:
+# oc get peerauthentication --all-namespaces
+# Pod 간 통신 확인:
+# oc exec deploy/frontend -n app-frontend -c frontend -- \
+#   curl -s -o /dev/null -w "%{http_code}" http://backend-svc.app-backend:80
+# ==============================================================================
+
+---
+# Mesh-wide PERMISSIVE (istio-system에 적용)
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: PERMISSIVE
+
+---
+# app-frontend PERMISSIVE
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: app-frontend
+spec:
+  mtls:
+    mode: PERMISSIVE
+
+---
+# app-backend PERMISSIVE
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: app-backend
+spec:
+  mtls:
+    mode: PERMISSIVE

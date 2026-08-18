@@ -1,0 +1,33 @@
+# ==============================================================================
+# 07. IstioCNI CR
+# ==============================================================================
+# 목적: Istio CNI 플러그인 배포
+#       - init container 없이 네트워크 트래픽 리다이렉션 수행
+#       - 노드 레벨에서 iptables 규칙 관리
+#       - Pod에 NET_ADMIN 권한 불필요하게 만듦 (보안 강화)
+# 배포형태: DaemonSet (istio-cni 네임스페이스)
+# 순서: OpenShift Service Mesh Operator 설치 후, Istio CR 생성 전
+# ==============================================================================
+#
+# 적용 전 네임스페이스 생성:
+# oc new-project istio-cni
+#
+# 적용:
+# oc apply -f 07-istio-cni.yaml
+#
+# 검증:
+# oc get daemonset/istio-cni-node -n istio-cni
+# oc rollout status daemonset/istio-cni-node -n istio-cni --timeout=300s
+# ==============================================================================
+
+apiVersion: sailoperator.io/v1
+kind: IstioCNI
+metadata:
+  name: default
+spec:
+  # IstioCNI를 배포할 네임스페이스
+  namespace: istio-cni
+
+  # Istio 버전 (Service Mesh Operator가 지원하는 버전으로 지정)
+  # 확인: oc get IstioCNI -o jsonpath='{.items[*].spec.version}'
+  # version: "v1.24.3"  # <-- 환경에 맞는 버전으로 지정 (생략 시 기본값 사용)

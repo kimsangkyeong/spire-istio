@@ -1,0 +1,56 @@
+# ==============================================================================
+# Phase 2: Istio CR 수정 - SPIRE 연동 설정 제거
+# ==============================================================================
+# 목적: Istio 내장 CA(citadel)로 전환
+#       - spire 사이드카 injection 템플릿 제거
+#       - WORKLOAD_IDENTITY_SOCKET_FILE 제거
+#       - jwksResolverExtraRootCA 제거
+#       - trustDomain을 cluster.local로 변경
+# 시점: Phase 1 (PERMISSIVE) 적용 후
+# 위험도: 중간 (istiod 재시작됨, 기존 Pod는 PERMISSIVE이므로 통신 유지)
+# ==============================================================================
+#
+# 적용:
+# oc apply -f 02-istio-cr-without-spire.yaml
+#
+# 검증:
+# oc wait --for=condition=Available deployment/istiod -n istio-system --timeout=300s
+# oc logs deployment/istiod -n istio-system | tail -20
+# ==============================================================================
+
+apiVersion: sailoperator.io/v1
+kind: Istio
+metadata:
+  name: default
+spec:
+  namespace: istio-system
+  updateStrategy:
+    type: InPlace
+  values:
+    # =========================================================================
+    # Pilot (istiod) 설정 - SPIRE 관련 제거됨
+    # =========================================================================
+    pilot:
+      # jwksResolverExtraRootCA: 제거 (SPIRE OIDC 불필요)
+      env:
+        # PILOT_JWT_ENABLE_REMOTE_JWKS: 제거 (SPIRE OIDC 불필요)
+        # Istio 내장 CA 활성화 (기본값이므로 명시적 설정 불필요하나 명확히 표기)
+        ENABLE_CA_SERVER: "true"
+
+    # =========================================================================
+    # Mesh 전역 설정 - Istio 기본 Trust Domain 사용
+    # =========================================================================
+    meshConfig:
+      # Trust Domain: Istio 기본값 cluster.local 사용
+      trustDomain: "cluster.local"
+
+      # defaultConfig에서 SPIRE 관련 proxyMetadata 제거
+      # WORKLOAD_IDENTITY_SOCKET_FILE 제거 → Envoy가 istiod SDS를 직접 사용
+      defaultConfig: {}
+
+    # =========================================================================
+    # Sidecar Injector - SPIRE 전용 템플릿 제거
+    # =========================================================================
+    # sidecarInjectorWebhook.templates에서 spire, spireGateway 제거
+    # 기본 sidecar 템플릿만 사용
+    # (templates 섹션 자체를 생략하면 기본 템플릿만 적용됨)

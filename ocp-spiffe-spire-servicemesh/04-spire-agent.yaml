@@ -1,0 +1,53 @@
+# ==============================================================================
+# 04. SpireAgent CR
+# ==============================================================================
+# 목적: 각 노드에 SPIRE Agent DaemonSet 배포
+#       - 워크로드 attestation 수행
+#       - SPIRE Server와 통신하여 SVID 획득
+#       - Envoy SDS API 제공 (Istio 연동 핵심)
+# 배포형태: DaemonSet (모든 노드에 1개씩)
+# 순서: SpireServer CR 생성 및 Ready 상태 확인 후
+# ==============================================================================
+#
+# 적용:
+# oc apply -f 04-spire-agent.yaml
+#
+# 검증:
+# oc get daemonset -l app.kubernetes.io/name=agent -n zero-trust-workload-identity-manager
+# oc get po -l app.kubernetes.io/name=agent -n zero-trust-workload-identity-manager
+# ==============================================================================
+
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpireAgent
+metadata:
+  name: cluster
+spec:
+  # Agent 소켓 경로 (SpiffeCSIDriver.spec.agentSocketPath와 반드시 일치해야 함)
+  socketPath: "/run/spire/agent-sockets"
+
+  # --- 로깅 설정 ---
+  logLevel: "info"          # debug, info, warn, error
+  logFormat: "text"         # text, json
+
+  # --- 노드 어테스터 ---
+  # Kubernetes Projected Service Account Token (PSAT) 기반 노드 인증
+  nodeAttestor:
+    k8sPSATEnabled: "true"
+
+  # --- 워크로드 어테스터 ---
+  workloadAttestors:
+    # Kubernetes 워크로드 attestor 활성화
+    k8sEnabled: "true"
+
+    # Kubelet 인증서 검증 설정
+    workloadAttestorsVerification:
+      type: "auto"                          # auto, hostCert, skip
+      hostCertBasePath: "/etc/kubernetes"    # kubelet CA 경로
+      hostCertFileName: "kubelet-ca.crt"    # kubelet CA 파일명
+
+    # 컨테이너 셀렉터 비활성화 여부
+    # Istio holdApplicationUntilProxyStarts 사용 시 "true"로 설정
+    disableContainerSelectors: "false"
+
+    # cgroups v2 지원 새 컨테이너 로케이터 사용
+    useNewContainerLocator: "true"

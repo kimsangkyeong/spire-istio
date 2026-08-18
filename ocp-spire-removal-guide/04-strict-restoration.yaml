@@ -1,0 +1,67 @@
+# ==============================================================================
+# Phase 4: STRICT mTLS 복원
+# ==============================================================================
+# 목적: 모든 Pod가 Istio 내장 CA 인증서를 정상 수신하는 것을 확인한 후
+#       PERMISSIVE → STRICT로 다시 전환하여 평문 통신 차단
+# 시점: Phase 3 완료 후 모든 Pod가 새 인증서로 통신 정상 확인 후
+# 위험도: 낮음 (이미 모든 Pod가 Istio CA 인증서를 가지고 있으므로)
+# ==============================================================================
+#
+# 적용 전 확인:
+# 1. 모든 Pod가 Running 상태인지 확인
+#    oc get pods -n app-frontend
+#    oc get pods -n app-backend
+#
+# 2. Istio CA에서 인증서 발급받았는지 확인
+#    FRONTEND_POD=$(oc get pod -l app=frontend -n app-frontend -o jsonpath="{.items[0].metadata.name}")
+#    istioctl proxy-config secret $FRONTEND_POD -n app-frontend -o json | \
+#      jq -r '.dynamicActiveSecrets[0].secret.tlsCertificate.certificateChain.inlineBytes' | \
+#      base64 --decode | openssl x509 -text -noout | grep "Issuer"
+#    → "Issuer: O = cluster.local" 확인
+#
+# 3. Pod 간 통신 정상 확인
+#    oc exec deploy/frontend -n app-frontend -c frontend -- \
+#      curl -s -o /dev/null -w "%{http_code}" http://backend-svc.app-backend:80
+#    → 200
+#
+# 적용:
+# oc apply -f 04-strict-restoration.yaml
+#
+# 적용 후 검증:
+# oc exec deploy/frontend -n app-frontend -c frontend -- \
+#   curl -s -o /dev/null -w "%{http_code}" http://backend-svc.app-backend:80
+# → 200 (mTLS로 정상 통신)
+# ==============================================================================
+
+---
+# Mesh-wide STRICT 복원
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system
+spec:
+  mtls:
+    mode: STRICT
+
+---
+# app-frontend STRICT
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: app-frontend
+spec:
+  mtls:
+    mode: STRICT
+
+---
+# app-backend STRICT
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: app-backend
+spec:
+  mtls:
+    mode: STRICT

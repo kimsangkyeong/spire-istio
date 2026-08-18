@@ -1,0 +1,94 @@
+# ==============================================================================
+# Phase 6: SPIRE 리소스 완전 제거
+# ==============================================================================
+# 목적: 더 이상 사용하지 않는 SPIRE/ZTWIM 리소스 정리
+# 시점: Phase 5까지 모든 검증 완료 후 최종 단계
+# 위험도: 낮음 (이미 모든 워크로드가 Istio CA로 전환 완료)
+# 주의: 이 작업은 되돌릴 수 없습니다. SPIRE 재설치 시 새 CA 키가 생성됩니다.
+# ==============================================================================
+#
+# 삭제 순서 (생성의 역순):
+# 1. SpireOIDCDiscoveryProvider
+# 2. SpiffeCSIDriver
+# 3. SpireAgent
+# 4. SpireServer
+# 5. ZeroTrustWorkloadIdentityManager
+# 6. PVC (데이터 삭제)
+# 7. Namespace (선택)
+# 8. CRD (선택 - Operator 제거 시 자동 삭제될 수 있음)
+#
+# ==============================================================================
+# 아래 명령을 순서대로 실행하세요:
+# ==============================================================================
+
+# --- Step 1: CreateOnly Mode 비활성화 (CR 삭제가 정상 처리되도록) ---
+# oc -n zero-trust-workload-identity-manager patch subscription \
+#   openshift-zero-trust-workload-identity-manager \
+#   --type='merge' -p '{"spec":{"config":{"env":[{"name":"CREATE_ONLY_MODE","value":"false"}]}}}'
+#
+# 잠시 대기 (Operator Pod 재시작):
+# oc rollout status deployment/zero-trust-workload-identity-manager-controller-manager \
+#   -n zero-trust-workload-identity-manager --timeout=120s
+
+# --- Step 2: Operand CR 삭제 (역순) ---
+# oc delete SpireOIDCDiscoveryProvider cluster
+# oc delete SpiffeCSIDriver cluster
+# oc delete SpireAgent cluster
+# oc delete SpireServer cluster
+# oc delete ZeroTrustWorkloadIdentityManager cluster
+
+# --- Step 3: PVC 삭제 (SPIRE Server 데이터) ---
+# oc delete pvc -l app.kubernetes.io/name=spire-server \
+#   -n zero-trust-workload-identity-manager
+
+# --- Step 4: 잔여 리소스 정리 ---
+# oc delete service -l app.kubernetes.io/name=zero-trust-workload-identity-manager \
+#   -n zero-trust-workload-identity-manager
+
+# --- Step 5: Operator 제거 (OperatorHub에서 Uninstall) ---
+# 방법 A: Web Console → Operators → Installed Operators → ZTWIM → Uninstall
+# 방법 B: CLI
+# oc delete subscription openshift-zero-trust-workload-identity-manager \
+#   -n zero-trust-workload-identity-manager
+# oc delete csv -l operators.coreos.com/openshift-zero-trust-workload-identity-manager \
+#   -n zero-trust-workload-identity-manager
+
+# --- Step 6: ClusterRole, Webhook 정리 ---
+# oc delete clusterrole -l app.kubernetes.io/name=zero-trust-workload-identity-manager
+# oc delete validatingwebhookconfigurations \
+#   -l app.kubernetes.io/name=zero-trust-workload-identity-manager
+
+# --- Step 7: Namespace 삭제 (선택) ---
+# oc delete namespace zero-trust-workload-identity-manager
+
+# --- Step 8: CRD 삭제 (Operator 제거 후에도 남아있는 경우) ---
+# oc delete crd spireservers.operator.openshift.io
+# oc delete crd spireagents.operator.openshift.io
+# oc delete crd spiffecsidrivers.operator.openshift.io
+# oc delete crd spireoidcdiscoveryproviders.operator.openshift.io
+# oc delete crd clusterfederatedtrustdomains.spire.spiffe.io
+# oc delete crd clusterspiffeids.spire.spiffe.io
+# oc delete crd clusterstaticentries.spire.spiffe.io
+# oc delete crd zerotrustworkloadidentitymanagers.operator.openshift.io
+
+# ==============================================================================
+# 최종 검증
+# ==============================================================================
+# 1. SPIRE 관련 리소스가 남아있지 않은지 확인:
+# oc get all -n zero-trust-workload-identity-manager
+# → "No resources found" 확인
+#
+# 2. CSI Driver 제거 확인:
+# oc get csidrivers | grep spiffe
+# → 결과 없음
+#
+# 3. 서비스 통신 최종 확인:
+# oc exec deploy/frontend -n app-frontend -c frontend -- \
+#   curl -s -o /dev/null -w "%{http_code}" http://backend-svc.app-backend:80
+# → 200
+#
+# 4. Istio CA 인증서 확인:
+# FRONTEND_POD=$(oc get pod -l app=frontend -n app-frontend -o jsonpath="{.items[0].metadata.name}")
+# istioctl proxy-config secret $FRONTEND_POD -n app-frontend
+# → ROOTCA, default 시크릿이 정상 표시
+# ==============================================================================

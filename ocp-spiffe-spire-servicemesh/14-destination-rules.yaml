@@ -1,0 +1,78 @@
+# ==============================================================================
+# 14. DestinationRule - mTLS 및 Subset 정의
+# ==============================================================================
+# 목적: 서비스별 TLS 모드와 버전 기반 서브셋 정의
+#       - ISTIO_MUTUAL: Istio가 관리하는 mTLS (SPIRE 인증서 사용)
+#       - Subset: VirtualService에서 참조하는 버전별 Pod 그룹
+# ==============================================================================
+#
+# 적용:
+# oc apply -f 14-destination-rules.yaml
+#
+# 검증:
+# oc get destinationrules -n app-frontend
+# oc get destinationrules -n app-backend
+# ==============================================================================
+
+---
+# Frontend Service DestinationRule
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: frontend-dr
+  namespace: app-frontend
+spec:
+  host: frontend-svc.app-frontend.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL   # SPIRE 발급 인증서로 mTLS
+    connectionPool:
+      tcp:
+        maxConnections: 100
+      http:
+        h2UpgradePolicy: DEFAULT
+        http1MaxPendingRequests: 100
+        http2MaxRequests: 1000
+    loadBalancer:
+      simple: ROUND_ROBIN
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+    - name: v2
+      labels:
+        version: v2
+
+---
+# Backend Service DestinationRule
+apiVersion: networking.istio.io/v1
+kind: DestinationRule
+metadata:
+  name: backend-dr
+  namespace: app-backend
+spec:
+  host: backend-svc.app-backend.svc.cluster.local
+  trafficPolicy:
+    tls:
+      mode: ISTIO_MUTUAL   # SPIRE 발급 인증서로 mTLS
+    connectionPool:
+      tcp:
+        maxConnections: 200
+      http:
+        h2UpgradePolicy: DEFAULT
+        http1MaxPendingRequests: 200
+        http2MaxRequests: 2000
+    loadBalancer:
+      simple: LEAST_REQUEST
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 10s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+    - name: v2
+      labels:
+        version: v2

@@ -1,0 +1,31 @@
+# ==============================================================================
+# 05. SpiffeCSIDriver CR
+# ==============================================================================
+# 목적: SPIFFE CSI Driver 배포
+#       - Pod에 SPIRE Agent 소켓을 CSI 볼륨으로 마운트
+#       - 워크로드가 Workload API에 접근 가능하게 함
+# 배포형태: DaemonSet
+# 순서: SpireAgent CR 생성 및 Ready 상태 확인 후
+# ==============================================================================
+#
+# 적용:
+# oc apply -f 05-spiffe-csi-driver.yaml
+#
+# 검증:
+# oc get daemonset -l app.kubernetes.io/name=spiffe-csi-driver -n zero-trust-workload-identity-manager
+# oc get po -l app.kubernetes.io/name=spiffe-csi-driver -n zero-trust-workload-identity-manager
+# oc get csidrivers | grep spiffe
+# ==============================================================================
+
+apiVersion: operator.openshift.io/v1alpha1
+kind: SpiffeCSIDriver
+metadata:
+  name: cluster
+spec:
+  # SPIRE Agent 소켓 디렉토리 경로
+  # 반드시 SpireAgent.spec.socketPath 값과 일치해야 함
+  agentSocketPath: "/run/spire/agent-sockets"
+
+  # CSI 드라이버 플러그인 이름
+  # Pod의 volumes.csi.driver에서 참조하는 이름
+  pluginName: "csi.spiffe.io"

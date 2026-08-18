@@ -1,0 +1,183 @@
+# ==============================================================================
+# 13. AuthorizationPolicy - Zero Trust 접근제어
+# ==============================================================================
+# 목적: SPIFFE ID 기반 세밀한 서비스 간 접근 제어
+#       - 허용되지 않은 서비스의 접근 차단 (deny-by-default)
+#       - principals: SPIFFE ID 패턴 매칭
+#       - namespaces: 소스 네임스페이스 제한
+#       - methods/paths: HTTP 메서드/경로 제한
+# Zero Trust 원칙: "기본 거부 + 명시적 허용"
+# ==============================================================================
+#
+# 적용:
+# oc apply -f 13-authorization-policy.yaml
+#
+# 검증:
+# oc get authorizationpolicies --all-namespaces
+# 테스트:
+# - 허용된 서비스에서 호출: 200 OK
+# - 허용되지 않은 서비스에서 호출: 403 Forbidden
+# ==============================================================================
+
+---
+# ============================================================================
+# 1. Deny-All 기본 정책 (Zero Trust 기반)
+# ============================================================================
+# 모든 인바운드 트래픽을 기본 거부
+# 이후 ALLOW 정책으로 명시적 허용만 추가
+
+# --- app-frontend: 기본 거부 ---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all
+  namespace: app-frontend
+spec:
+  # rules가 비어있으면 모든 요청 거부
+  {}
+
+---
+# --- app-backend: 기본 거부 ---
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all
+  namespace: app-backend
+spec:
+  {}
+
+---
+# ============================================================================
+# 2. NGINX IC Plus → Frontend 허용 정책
+# ============================================================================
+# NGINX IC는 mesh 외부이므로 SPIFFE ID가 없음
+# source.namespaces 또는 source.ipBlocks로 허용
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-nginx-ingress
+  namespace: app-frontend
+spec:
+  selector:
+    matchLabels:
+      app: frontend
+  action: ALLOW
+  rules:
+    - from:
+        # NGINX IC가 mesh 외부에서 들어오므로 소스가 없음
+        # notNamespaces/notPrincipals를 사용하지 않고, 소스 지정 없이
+        # "to" 조건만으로 인바운드 허용 (NGINX IC 네임스페이스에서 오는 트래픽)
+        - source:
+            namespaces:
+              - "nginx-ingress"      # <-- NGINX IC Plus 네임스페이스
+            # 또는 IP 기반:
+            # ipBlocks: ["10.128.0.0/14"]  # OCP pod CIDR
+      to:
+        - operation:
+            methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"]
+            ports: ["8080"]
+
+---
+# ============================================================================
+# 3. Frontend → Backend 허용 정책 (SPIFFE ID 기반)
+# ============================================================================
+# frontend ServiceAccount의 SPIFFE ID만 backend에 접근 허용
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-frontend-to-backend
+  namespace: app-backend
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            # SPIFFE ID 패턴 매칭
+            # 형식: spiffe://<trust-domain>/ns/<namespace>/sa/<service-account>
+            principals:
+              - "cluster.local/ns/app-frontend/sa/frontend"
+            # 또는 와일드카드:
+            # principals:
+            #   - "*/ns/app-frontend/sa/frontend"
+            namespaces:
+              - "app-frontend"
+      to:
+        - operation:
+            methods: ["GET", "POST"]
+            ports: ["8080"]
+            # 특정 경로만 허용 (선택):
+            # paths: ["/api/*", "/health"]
+
+---
+# ============================================================================
+# 4. 같은 네임스페이스 내 Pod 간 통신 허용
+# ============================================================================
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-same-namespace
+  namespace: app-backend
+spec:
+  selector:
+    matchLabels:
+      app: backend
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces:
+              - "app-backend"
+
+---
+# ============================================================================
+# 5. Kubernetes Probe 허용 (kubelet의 Health Check)
+# ============================================================================
+# kubelet은 sidecar를 통하지 않으므로 별도 허용 필요 없음 (직접 컨테이너 접근)
+# 단, holdApplicationUntilProxyStarts: true 설정 시 probe 지연 가능
+# 아래는 참고용으로 Prometheus scraping 허용 예시
+
+# apiVersion: security.istio.io/v1
+# kind: AuthorizationPolicy
+# metadata:
+#   name: allow-prometheus
+#   namespace: app-backend
+# spec:
+#   selector:
+#     matchLabels:
+#       app: backend
+#   action: ALLOW
+#   rules:
+#     - from:
+#         - source:
+#             namespaces:
+#               - "openshift-monitoring"
+#               - "openshift-user-workload-monitoring"
+#       to:
+#         - operation:
+#             ports: ["15020"]   # Envoy prometheus 포트
+
+---
+# ============================================================================
+# 6. [고급] RequestAuthentication - JWT 기반 인증 (선택)
+# ============================================================================
+# 외부에서 들어오는 JWT를 검증하려면 RequestAuthentication 사용
+# SPIRE OIDC Provider와 연계 가능
+
+# apiVersion: security.istio.io/v1
+# kind: RequestAuthentication
+# metadata:
+#   name: require-jwt
+#   namespace: app-frontend
+# spec:
+#   selector:
+#     matchLabels:
+#       app: frontend
+#   jwtRules:
+#     - issuer: "https://oidc-discovery.apps.ocp4.example.com"
+#       jwksUri: "https://oidc-discovery.apps.ocp4.example.com/keys"
+#       audiences:
+#         - "ocp-mesh-workload"
+#       forwardOriginalToken: true

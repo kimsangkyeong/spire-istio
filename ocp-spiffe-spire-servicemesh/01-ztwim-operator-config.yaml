@@ -1,0 +1,32 @@
+# ==============================================================================
+# 01. Zero Trust Workload Identity Manager Operator - CreateOnly Mode 설정
+# ==============================================================================
+# 목적: Istio 연동 시 Operator가 SPIRE 설정을 자동 덮어쓰지 않도록 방지
+# 시점: Operator 설치 후, CR 생성 전에 실행
+# 실행: oc apply 또는 oc patch 명령으로 적용
+# ==============================================================================
+
+# --- 방법 1: oc patch 명령으로 적용 (권장) ---
+# oc -n zero-trust-workload-identity-manager patch subscription \
+#   openshift-zero-trust-workload-identity-manager \
+#   --type='merge' -p '{"spec":{"config":{"env":[{"name":"CREATE_ONLY_MODE","value":"true"}]}}}'
+
+# --- 방법 2: Subscription 직접 수정 ---
+# 아래는 참조용이며, 실제로는 patch 명령 사용을 권장합니다.
+# Operator 설치 시 자동 생성된 Subscription에 env를 추가합니다.
+#
+# apiVersion: operators.coreos.com/v1alpha1
+# kind: Subscription
+# metadata:
+#   name: openshift-zero-trust-workload-identity-manager
+#   namespace: zero-trust-workload-identity-manager
+# spec:
+#   channel: stable-v1
+#   name: openshift-zero-trust-workload-identity-manager
+#   source: redhat-operators
+#   sourceNamespace: openshift-marketplace
+#   installPlanApproval: Automatic
+#   config:
+#     env:
+#       - name: CREATE_ONLY_MODE
+#         value: "true"

@@ -1,0 +1,82 @@
+# ==============================================================================
+# 12. PeerAuthentication - STRICT mTLS 정책
+# ==============================================================================
+# 목적: 서비스 간 통신에 mTLS를 강제하여 Zero Trust 달성
+#       - STRICT: 암호화되지 않은 평문 트래픽 완전 차단
+#       - SPIRE가 발급한 X.509 SVID로 상호 인증
+# 적용 전략:
+#   Phase 1 → PERMISSIVE (기존 트래픽 호환, 로그 모니터링)
+#   Phase 2 → STRICT (완전한 mTLS 강제)
+# ==============================================================================
+#
+# 적용:
+# oc apply -f 12-peer-authentication.yaml
+#
+# 검증:
+# oc get peerauthentication --all-namespaces
+# 테스트: mesh 내부에서 curl로 서비스 호출 시 200 응답 확인
+# CURL_POD=$(oc get pod -l app=frontend -n app-frontend -o jsonpath="{.items[0].metadata.name}")
+# oc exec $CURL_POD -n app-frontend -c frontend -- \
+#   curl -s -o /dev/null -w "%{http_code}" http://backend-svc.app-backend:80
+# ==============================================================================
+
+---
+# ============================================================================
+# [옵션 A] 메시 전체 STRICT mTLS (istio-system에 적용)
+# ============================================================================
+# 모든 mesh 참여 네임스페이스에 일괄 STRICT 적용
+# 주의: 점진적 롤아웃 시에는 네임스페이스별로 개별 적용 권장
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: istio-system   # istio-system에 적용 = mesh-wide 정책
+spec:
+  mtls:
+    mode: STRICT            # STRICT | PERMISSIVE | DISABLE
+
+---
+# ============================================================================
+# [옵션 B] 네임스페이스별 STRICT mTLS (점진적 적용 시 사용)
+# ============================================================================
+
+# --- app-frontend 네임스페이스 ---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: app-frontend
+spec:
+  mtls:
+    mode: STRICT
+
+---
+# --- app-backend 네임스페이스 ---
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: app-backend
+spec:
+  mtls:
+    mode: STRICT
+
+---
+# ============================================================================
+# [옵션 C] 특정 포트만 PERMISSIVE (Health Check 등 예외 처리)
+# ============================================================================
+# 예: Kubernetes liveness/readiness probe가 sidecar를 거치지 않는 경우
+# apiVersion: security.istio.io/v1beta1
+# kind: PeerAuthentication
+# metadata:
+#   name: backend-port-exception
+#   namespace: app-backend
+# spec:
+#   selector:
+#     matchLabels:
+#       app: backend
+#   mtls:
+#     mode: STRICT
+#   portLevelMtls:
+#     8081:                 # metrics/health 전용 포트
+#       mode: PERMISSIVE

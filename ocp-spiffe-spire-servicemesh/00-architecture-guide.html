@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>00-architecture-guide.md</title>
+<meta http-equiv="Content-type" content="text/html;charset=UTF-8">
+
+<style>
+/* https://github.com/microsoft/vscode/blob/master/extensions/markdown-language-features/media/markdown.css */
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+body {
+	font-family: var(--vscode-markdown-font-family, -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif);
+	font-size: var(--vscode-markdown-font-size, 14px);
+	padding: 0 26px;
+	line-height: var(--vscode-markdown-line-height, 22px);
+	word-wrap: break-word;
+}
+
+#code-csp-warning {
+	position: fixed;
+	top: 0;
+	right: 0;
+	color: white;
+	margin: 16px;
+	text-align: center;
+	font-size: 12px;
+	font-family: sans-serif;
+	background-color:#444444;
+	cursor: pointer;
+	padding: 6px;
+	box-shadow: 1px 1px 1px rgba(0,0,0,.25);
+}
+
+#code-csp-warning:hover {
+	text-decoration: none;
+	background-color:#007acc;
+	box-shadow: 2px 2px 2px rgba(0,0,0,.25);
+}
+
+body.scrollBeyondLastLine {
+	margin-bottom: calc(100vh - 22px);
+}
+
+body.showEditorSelection .code-line {
+	position: relative;
+}
+
+body.showEditorSelection .code-active-line:before,
+body.showEditorSelection .code-line:hover:before {
+	content: "";
+	display: block;
+	position: absolute;
+	top: 0;
+	left: -12px;
+	height: 100%;
+}
+
+body.showEditorSelection li.code-active-line:before,
+body.showEditorSelection li.code-line:hover:before {
+	left: -30px;
+}
+
+.vscode-light.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.15);
+}
+
+.vscode-light.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(0, 0, 0, 0.40);
+}
+
+.vscode-light.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-dark.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.4);
+}
+
+.vscode-dark.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 255, 255, 0.60);
+}
+
+.vscode-dark.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+.vscode-high-contrast.showEditorSelection .code-active-line:before {
+	border-left: 3px solid rgba(255, 160, 0, 0.7);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line:hover:before {
+	border-left: 3px solid rgba(255, 160, 0, 1);
+}
+
+.vscode-high-contrast.showEditorSelection .code-line .code-line:hover:before {
+	border-left: none;
+}
+
+img {
+	max-width: 100%;
+	max-height: 100%;
+}
+
+a {
+	text-decoration: none;
+}
+
+a:hover {
+	text-decoration: underline;
+}
+
+a:focus,
+input:focus,
+select:focus,
+textarea:focus {
+	outline: 1px solid -webkit-focus-ring-color;
+	outline-offset: -1px;
+}
+
+hr {
+	border: 0;
+	height: 2px;
+	border-bottom: 2px solid;
+}
+
+h1 {
+	padding-bottom: 0.3em;
+	line-height: 1.2;
+	border-bottom-width: 1px;
+	border-bottom-style: solid;
+}
+
+h1, h2, h3 {
+	font-weight: normal;
+}
+
+table {
+	border-collapse: collapse;
+}
+
+table > thead > tr > th {
+	text-align: left;
+	border-bottom: 1px solid;
+}
+
+table > thead > tr > th,
+table > thead > tr > td,
+table > tbody > tr > th,
+table > tbody > tr > td {
+	padding: 5px 10px;
+}
+
+table > tbody > tr + tr > td {
+	border-top: 1px solid;
+}
+
+blockquote {
+	margin: 0 7px 0 5px;
+	padding: 0 16px 0 10px;
+	border-left-width: 5px;
+	border-left-style: solid;
+}
+
+code {
+	font-family: Menlo, Monaco, Consolas, "Droid Sans Mono", "Courier New", monospace, "Droid Sans Fallback";
+	font-size: 1em;
+	line-height: 1.357em;
+}
+
+body.wordWrap pre {
+	white-space: pre-wrap;
+}
+
+pre:not(.hljs),
+pre.hljs code > div {
+	padding: 16px;
+	border-radius: 3px;
+	overflow: auto;
+}
+
+pre code {
+	color: var(--vscode-editor-foreground);
+	tab-size: 4;
+}
+
+/** Theming */
+
+.vscode-light pre {
+	background-color: rgba(220, 220, 220, 0.4);
+}
+
+.vscode-dark pre {
+	background-color: rgba(10, 10, 10, 0.4);
+}
+
+.vscode-high-contrast pre {
+	background-color: rgb(0, 0, 0);
+}
+
+.vscode-high-contrast h1 {
+	border-color: rgb(0, 0, 0);
+}
+
+.vscode-light table > thead > tr > th {
+	border-color: rgba(0, 0, 0, 0.69);
+}
+
+.vscode-dark table > thead > tr > th {
+	border-color: rgba(255, 255, 255, 0.69);
+}
+
+.vscode-light h1,
+.vscode-light hr,
+.vscode-light table > tbody > tr + tr > td {
+	border-color: rgba(0, 0, 0, 0.18);
+}
+
+.vscode-dark h1,
+.vscode-dark hr,
+.vscode-dark table > tbody > tr + tr > td {
+	border-color: rgba(255, 255, 255, 0.18);
+}
+
+</style>
+
+<style>
+/* Tomorrow Theme */
+/* http://jmblog.github.com/color-themes-for-google-code-highlightjs */
+/* Original theme - https://github.com/chriskempson/tomorrow-theme */
+
+/* Tomorrow Comment */
+.hljs-comment,
+.hljs-quote {
+	color: #8e908c;
+}
+
+/* Tomorrow Red */
+.hljs-variable,
+.hljs-template-variable,
+.hljs-tag,
+.hljs-name,
+.hljs-selector-id,
+.hljs-selector-class,
+.hljs-regexp,
+.hljs-deletion {
+	color: #c82829;
+}
+
+/* Tomorrow Orange */
+.hljs-number,
+.hljs-built_in,
+.hljs-builtin-name,
+.hljs-literal,
+.hljs-type,
+.hljs-params,
+.hljs-meta,
+.hljs-link {
+	color: #f5871f;
+}
+
+/* Tomorrow Yellow */
+.hljs-attribute {
+	color: #eab700;
+}
+
+/* Tomorrow Green */
+.hljs-string,
+.hljs-symbol,
+.hljs-bullet,
+.hljs-addition {
+	color: #718c00;
+}
+
+/* Tomorrow Blue */
+.hljs-title,
+.hljs-section {
+	color: #4271ae;
+}
+
+/* Tomorrow Purple */
+.hljs-keyword,
+.hljs-selector-tag {
+	color: #8959a8;
+}
+
+.hljs {
+	display: block;
+	overflow-x: auto;
+	color: #4d4d4c;
+	padding: 0.5em;
+}
+
+.hljs-emphasis {
+	font-style: italic;
+}
+
+.hljs-strong {
+	font-weight: bold;
+}
+</style>
+
+<style>
+/*
+ * Markdown PDF CSS
+ */
+
+ body {
+	font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "Ubuntu", "Droid Sans", sans-serif, "Meiryo";
+	padding: 0 12px;
+}
+
+pre {
+	background-color: #f8f8f8;
+	border: 1px solid #cccccc;
+	border-radius: 3px;
+	overflow-x: auto;
+	white-space: pre-wrap;
+	overflow-wrap: break-word;
+}
+
+pre:not(.hljs) {
+	padding: 23px;
+	line-height: 19px;
+}
+
+blockquote {
+	background: rgba(127, 127, 127, 0.1);
+	border-color: rgba(0, 122, 204, 0.5);
+}
+
+.emoji {
+	height: 1.4em;
+}
+
+code {
+	font-size: 14px;
+	line-height: 19px;
+}
+
+/* for inline code */
+:not(pre):not(.hljs) > code {
+	color: #C9AE75; /* Change the old color so it seems less like an error */
+	font-size: inherit;
+}
+
+/* Page Break : use <div class="page"/> or <div class="page"></div> to insert page break
+-------------------------------------------------------- */
+.page {
+	page-break-after: always;
+}
+
+</style>
+
+<script src="https://unpkg.com/mermaid/dist/mermaid.min.js"></script>
+</head>
+<body>
+  <script>
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: document.body.classList.contains('vscode-dark') || document.body.classList.contains('vscode-high-contrast')
+          ? 'dark'
+          : 'default'
+    });
+  </script>
+<h1 id="ocp-420-spiffespire--service-mesh-sidecar-mode--nginx-ic-plus-연동-구성-가이드">OCP 4.20 SPIFFE/SPIRE + Service Mesh (Sidecar Mode) + NGINX IC Plus 연동 구성 가이드</h1>
+<h2 id="1-전체-아키텍처-개요">1. 전체 아키텍처 개요</h2>
+<h3 id="11-구성-환경-요약">1.1 구성 환경 요약</h3>
+<table>
+<thead>
+<tr>
+<th>항목</th>
+<th>내용</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OCP 버전</td>
+<td>4.20.23</td>
+</tr>
+<tr>
+<td>Ingress Controller</td>
+<td>NGINX IC Plus + F5 CIS 연계</td>
+</tr>
+<tr>
+<td>Service Mesh 모드</td>
+<td>Sidecar Only (Gateway 미사용)</td>
+</tr>
+<tr>
+<td>ID 프레임워크</td>
+<td>SPIFFE/SPIRE (Zero Trust Workload Identity Manager)</td>
+</tr>
+<tr>
+<td>목표</td>
+<td>Zero Trust mTLS 환경 + SPIRE 기반 Workload Identity</td>
+</tr>
+</tbody>
+</table>
+<h3 id="12-아키텍처-다이어그램">1.2 아키텍처 다이어그램</h3>
+<pre class="hljs"><code><div>┌─────────────────────────────────────────────────────────────────────────────────┐
+│                         OCP 4.20.23 Cluster                                      │
+│                                                                                  │
+│  ┌──────────────────────────────────────────────────────────────────────────┐   │
+│  │  External Traffic Flow (North-South)                                      │   │
+│  │                                                                           │   │
+│  │   Client → F5 BIG-IP → NGINX IC Plus (VirtualServer CR)                  │   │
+│  │                              │                                            │   │
+│  │                              ▼                                            │   │
+│  │                    K8s Service (ClusterIP)                                 │   │
+│  │                              │                                            │   │
+│  │                              ▼                                            │   │
+│  │              ┌──────────────────────────────┐                             │   │
+│  │              │     Application Pod          │                             │   │
+│  │              │  ┌────────┐  ┌────────────┐  │                             │   │
+│  │              │  │  App   │  │ Envoy Side │  │                             │   │
+│  │              │  │Container│  │   car      │  │                             │   │
+│  │              │  └────────┘  └─────┬──────┘  │                             │   │
+│  │              │                    │CSI Mount │                             │   │
+│  │              └────────────────────┼─────────┘                             │   │
+│  └───────────────────────────────────┼──────────────────────────────────────┘   │
+│                                      │                                           │
+│  ┌───────────────────────────────────┼──────────────────────────────────────┐   │
+│  │  Service Mesh (East-West Traffic) │                                       │   │
+│  │                                   │ SPIFFE UDS Socket                     │   │
+│  │                                   ▼                                       │   │
+│  │  ┌─────────────────────────────────────────────────────────────┐          │   │
+│  │  │           Istio Control Plane (istiod)                       │          │   │
+│  │  │   - VirtualService (라우팅)                                  │          │   │
+│  │  │   - DestinationRule (mTLS: ISTIO_MUTUAL)                     │          │   │
+│  │  │   - PeerAuthentication (STRICT)                              │          │   │
+│  │  │   - AuthorizationPolicy (접근제어)                           │          │   │
+│  │  └─────────────────────────────────────────────────────────────┘          │   │
+│  └───────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                  │
+│  ┌───────────────────────────────────────────────────────────────────────────┐   │
+│  │  SPIFFE/SPIRE Layer (Zero Trust Workload Identity Manager)                 │   │
+│  │                                                                            │   │
+│  │  ┌────────────┐  ┌────────────┐  ┌──────────────┐  ┌─────────────────┐   │   │
+│  │  │ SPIRE      │  │ SPIRE      │  │ SPIFFE CSI   │  │ OIDC Discovery  │   │   │
+│  │  │ Server     │  │ Agent      │  │ Driver       │  │ Provider        │   │   │
+│  │  │(StatefulSet)│  │(DaemonSet) │  │(DaemonSet)   │  │(Deployment)     │   │   │
+│  │  └────────────┘  └────────────┘  └──────────────┘  └─────────────────┘   │   │
+│  │                                                                            │   │
+│  │  Namespace: zero-trust-workload-identity-manager                           │   │
+│  └───────────────────────────────────────────────────────────────────────────┘   │
+│                                                                                  │
+└──────────────────────────────────────────────────────────────────────────────────┘
+</div></code></pre>
+<h3 id="13-트래픽-흐름-상세">1.3 트래픽 흐름 상세</h3>
+<pre class="hljs"><code><div>[North-South Traffic]
+  Client
+    ↓
+  F5 BIG-IP (External LB)
+    ↓ (CIS가 VirtualServer 감지)
+  NGINX Ingress Controller Plus
+    ↓ (VirtualServer CR에 의해 라우팅)
+  K8s Service (ClusterIP)
+    ↓
+  Application Pod (Envoy Sidecar가 트래픽 인터셉트)
+    ↓ (SPIRE 발급 인증서로 mTLS)
+  Backend Service Pod
+
+[East-West Traffic]
+  Pod A (Envoy Sidecar)
+    ↓ mTLS (SPIRE SVID)
+  Pod B (Envoy Sidecar)
+    - Istio VirtualService가 라우팅 제어
+    - DestinationRule이 TLS 모드 결정
+    - PeerAuthentication이 STRICT mTLS 강제
+    - AuthorizationPolicy가 접근 허용/거부
+</div></code></pre>
+<hr>
+<h2 id="2-설치-절차-순서-중요">2. 설치 절차 (순서 중요)</h2>
+<h3 id="전체-설치-순서">전체 설치 순서</h3>
+<table>
+<thead>
+<tr>
+<th>단계</th>
+<th>작업</th>
+<th>네임스페이스</th>
+<th>비고</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>ZTWIM Operator 설치</td>
+<td>zero-trust-workload-identity-manager</td>
+<td>OperatorHub에서 설치</td>
+</tr>
+<tr>
+<td>2</td>
+<td>CreateOnly Mode 활성화</td>
+<td>zero-trust-workload-identity-manager</td>
+<td>Istio 연동 시 필수</td>
+</tr>
+<tr>
+<td>3</td>
+<td>ZeroTrustWorkloadIdentityManager CR</td>
+<td>zero-trust-workload-identity-manager</td>
+<td>Trust Domain 정의</td>
+</tr>
+<tr>
+<td>4</td>
+<td>SpireServer CR</td>
+<td>zero-trust-workload-identity-manager</td>
+<td>CA 서버 역할</td>
+</tr>
+<tr>
+<td>5</td>
+<td>SpireAgent CR</td>
+<td>zero-trust-workload-identity-manager</td>
+<td>노드별 DaemonSet</td>
+</tr>
+<tr>
+<td>6</td>
+<td>SpiffeCSIDriver CR</td>
+<td>zero-trust-workload-identity-manager</td>
+<td>Pod에 소켓 마운트</td>
+</tr>
+<tr>
+<td>7</td>
+<td>SpireOIDCDiscoveryProvider CR</td>
+<td>zero-trust-workload-identity-manager</td>
+<td>JWT 검증 endpoint</td>
+</tr>
+<tr>
+<td>8</td>
+<td>OpenShift Service Mesh Operator 설치</td>
+<td>-</td>
+<td>OperatorHub에서 설치</td>
+</tr>
+<tr>
+<td>9</td>
+<td>IstioCNI CR</td>
+<td>istio-cni</td>
+<td>CNI 네트워크 설정</td>
+</tr>
+<tr>
+<td>10</td>
+<td>Istio CR (SPIRE 연동)</td>
+<td>istio-system</td>
+<td>핵심 연동 설정</td>
+</tr>
+<tr>
+<td>11</td>
+<td>애플리케이션 네임스페이스 설정</td>
+<td>app namespaces</td>
+<td>Injection 라벨</td>
+</tr>
+<tr>
+<td>12</td>
+<td>PeerAuthentication 적용</td>
+<td>app namespaces</td>
+<td>mTLS STRICT</td>
+</tr>
+<tr>
+<td>13</td>
+<td>AuthorizationPolicy 적용</td>
+<td>app namespaces</td>
+<td>Zero Trust 접근제어</td>
+</tr>
+<tr>
+<td>14</td>
+<td>애플리케이션 배포</td>
+<td>app namespaces</td>
+<td>Sidecar + SPIRE annotation</td>
+</tr>
+</tbody>
+</table>
+<hr>
+<h2 id="3-zero-trust-namespace-injection-전략">3. Zero Trust Namespace Injection 전략</h2>
+<h3 id="31-모든-네임스페이스에-injection해야-하는가">3.1 모든 네임스페이스에 Injection해야 하는가?</h3>
+<p><strong>결론: 아니오. 선택적으로 적용해야 합니다.</strong></p>
+<h4 id="제외해야-하는-ocp-엔진-네임스페이스들">제외해야 하는 OCP 엔진 네임스페이스들</h4>
+<p>다음 네임스페이스는 Istio sidecar injection을 하면 <strong>안 됩니다</strong>:</p>
+<table>
+<thead>
+<tr>
+<th>네임스페이스 패턴</th>
+<th>이유</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>openshift-*</code></td>
+<td>OCP 핵심 인프라 컴포넌트 (API Server, etcd, SDN 등)</td>
+</tr>
+<tr>
+<td><code>kube-system</code></td>
+<td>Kubernetes 핵심 시스템</td>
+</tr>
+<tr>
+<td><code>kube-public</code></td>
+<td>공개 설정</td>
+</tr>
+<tr>
+<td><code>default</code></td>
+<td>기본 네임스페이스 (사용 자제)</td>
+</tr>
+<tr>
+<td><code>istio-system</code></td>
+<td>Istio Control Plane 자체</td>
+</tr>
+<tr>
+<td><code>istio-cni</code></td>
+<td>CNI 네트워크 구성요소</td>
+</tr>
+<tr>
+<td><code>zero-trust-workload-identity-manager</code></td>
+<td>SPIRE 인프라 구성요소</td>
+</tr>
+</tbody>
+</table>
+<h4 id="injection-대상-네임스페이스-애플리케이션-워크로드">Injection 대상 네임스페이스 (애플리케이션 워크로드)</h4>
+<pre class="hljs"><code><div><span class="hljs-comment"># 대상 네임스페이스에 라벨 적용</span>
+oc label namespace &lt;app-namespace&gt; istio-injection=enabled
+</div></code></pre>
+<h4 id="권장-전략">권장 전략</h4>
+<pre class="hljs"><code><div>[ Mesh에 포함 ]                    [ Mesh에서 제외 ]
+┌──────────────────────┐          ┌──────────────────────┐
+│ - app-frontend       │          │ - openshift-*        │
+│ - app-backend        │          │ - kube-system        │
+│ - app-database       │          │ - istio-system       │
+│ - app-messaging      │          │ - istio-cni          │
+│ - dev-*              │          │ - zero-trust-*       │
+│ - staging-*          │          │ - monitoring (선택)   │
+│ - prod-*             │          │ - logging (선택)      │
+└──────────────────────┘          └──────────────────────┘
+</div></code></pre>
+<h3 id="32-점진적-적용-권장-절차">3.2 점진적 적용 권장 절차</h3>
+<ol>
+<li><strong>Phase 1</strong>: 하나의 비중요 애플리케이션 네임스페이스에 PERMISSIVE 모드로 적용</li>
+<li><strong>Phase 2</strong>: 정상 동작 확인 후 STRICT mTLS로 전환</li>
+<li><strong>Phase 3</strong>: 나머지 애플리케이션 네임스페이스로 확대 적용</li>
+<li><strong>Phase 4</strong>: AuthorizationPolicy로 세밀한 접근제어 적용</li>
+</ol>
+<hr>
+<h2 id="4-nginx-ic-plus-virtualserver--service-mesh-virtualservice-연동">4. NGINX IC Plus VirtualServer → Service Mesh VirtualService 연동</h2>
+<h3 id="41-트래픽-흐름-설계">4.1 트래픽 흐름 설계</h3>
+<pre class="hljs"><code><div>NGINX IC Plus (VirtualServer CR)
+        │
+        │ upstream: service-name.namespace.svc.cluster.local:port
+        │
+        ▼
+  K8s Service (ClusterIP, port 80/443)
+        │
+        │ (Envoy Sidecar가 인바운드 트래픽 인터셉트)
+        │
+        ▼
+  Istio VirtualService (내부 라우팅 규칙)
+        │
+        │ - weight-based routing
+        │ - header-based routing
+        │ - fault injection
+        │ - retry/timeout
+        │
+        ▼
+  Backend Pod (SPIRE 인증서로 mTLS 통신)
+</div></code></pre>
+<h3 id="42-핵심-포인트">4.2 핵심 포인트</h3>
+<ol>
+<li><strong>NGINX IC Plus VirtualServer</strong>는 외부 트래픽을 클러스터 내부 서비스로 전달 (단일 서비스 라우팅)</li>
+<li><strong>Istio VirtualService</strong>는 서비스 메시 내부에서 세밀한 라우팅 (canary, A/B, retry 등)</li>
+<li>NGINX IC 자체는 sidecar injection 대상이 아님 (별도 네임스페이스에서 운영)</li>
+<li>애플리케이션 Pod에 진입하는 시점에서 Envoy sidecar가 mTLS를 처리</li>
+</ol>
+<hr>
+<h2 id="5-파일-구조">5. 파일 구조</h2>
+<pre class="hljs"><code><div>ocp-spiffe-spire-servicemesh/
+├── 00-architecture-guide.md          # 이 문서
+├── 01-ztwim-operator-config.yaml     # CreateOnly Mode 설정
+├── 02-ztwim-cr.yaml                  # ZeroTrustWorkloadIdentityManager CR
+├── 03-spire-server.yaml              # SpireServer CR
+├── 04-spire-agent.yaml               # SpireAgent CR
+├── 05-spiffe-csi-driver.yaml         # SpiffeCSIDriver CR
+├── 06-spire-oidc-provider.yaml       # SpireOIDCDiscoveryProvider CR
+├── 07-istio-cni.yaml                 # IstioCNI CR
+├── 08-istio-cr-spire.yaml            # Istio CR (SPIRE 연동)
+├── 09-namespace-setup.yaml           # 네임스페이스 라벨링
+├── 10-nginx-virtualserver.yaml       # NGINX IC VirtualServer 예시
+├── 11-istio-virtualservice.yaml      # Istio VirtualService 예시
+├── 12-peer-authentication.yaml       # PeerAuthentication (STRICT mTLS)
+├── 13-authorization-policy.yaml      # AuthorizationPolicy (Zero Trust)
+├── 14-destination-rules.yaml         # DestinationRule (ISTIO_MUTUAL)
+└── 15-sample-app-deployment.yaml     # 샘플 애플리케이션 (SPIRE annotation)
+</div></code></pre>
+<hr>
+<h2 id="6-참고-사항">6. 참고 사항</h2>
+<h3 id="주요-참조-문서">주요 참조 문서</h3>
+<ul>
+<li><a href="https://docs.redhat.com/en/documentation/red_hat_openshift_service_mesh/3.4/html/installing/ossm-spire_ossm-cert-manager">Red Hat OSSM 3.4 - SPIRE Integration</a></li>
+<li><a href="https://docs.redhat.com/en/documentation/openshift_container_platform/4.21/html/security_and_compliance/zero-trust-workload-identity-manager">OCP 4.21 - Zero Trust Workload Identity Manager</a></li>
+<li><a href="https://istio.io/latest/docs/ops/integrations/spire/">Istio SPIRE Integration</a></li>
+</ul>
+<h3 id="spire--service-mesh-연동-시-technology-preview-주의">SPIRE + Service Mesh 연동 시 Technology Preview 주의</h3>
+<p>현재(ZTWIM 1.1.0, OSSM 3.4 기준) Service Mesh와 SPIRE 연동은 <strong>Technology Preview</strong> 상태입니다. 프로덕션에서는 Red Hat SLA 적용 범위를 확인하세요.</p>
+<h3 id="주요-환경-변수-설치-전-확인">주요 환경 변수 (설치 전 확인)</h3>
+<pre class="hljs"><code><div><span class="hljs-comment"># 클러스터 도메인 확인</span>
+<span class="hljs-built_in">export</span> CLUSTER_DOMAIN=$(oc get ingresses.config/cluster -o jsonpath=<span class="hljs-string">&#x27;{.spec.domain}&#x27;</span>)
+
+<span class="hljs-comment"># Trust Domain 설정 (클러스터 apps 도메인 권장)</span>
+<span class="hljs-built_in">export</span> TRUST_DOMAIN=<span class="hljs-variable">${CLUSTER_DOMAIN}</span>
+
+<span class="hljs-comment"># ZTWIM 네임스페이스</span>
+<span class="hljs-built_in">export</span> ZTWIM_NS=zero-trust-workload-identity-manager
+
+<span class="hljs-comment"># JWT Issuer (OIDC Discovery Provider URL)</span>
+<span class="hljs-built_in">export</span> JWT_ISSUER=<span class="hljs-string">&quot;https://oidc-discovery.<span class="hljs-variable">${CLUSTER_DOMAIN}</span>&quot;</span>
+
+<span class="hljs-comment"># Istio 네임스페이스</span>
+<span class="hljs-built_in">export</span> OSSM_NS=istio-system
+<span class="hljs-built_in">export</span> OSSM_CNI=istio-cni
+</div></code></pre>
+
+</body>
+</html>
